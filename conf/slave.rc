@@ -1,0 +1,54 @@
+
+[logging]
+level = DEBUG
+path = /tmp/cinepeer.log
+
+[bokor]
+token = SLAVE
+
+[slave]
+socket_idle = 1
+socket_keep_alive = 1
+socket_max_fail = 15
+master = 127.0.0.1 
+
+port = 4242
+url_conf = http://example.net/conf/
+
+
+
+[rtorrent]
+bin = /home/jdoe/dev/cinego/cinegop2p/soft/local/bin/rtorrent
+scgi_ip = 127.0.0.1
+scgi_port = 5000
+bind = 0.0.0.0
+port_max = 49164
+port_min = 49164
+path_session = /home/jdoe/tmp/slave/session
+path_log = /home/jdoe/tmp/slave/logs
+path_dl = /home/jdoe/media/divx/cinego/dl
+post_dl = /home/jdoe/dev/bokor/src/enable_post.py
+ci_up = 1
+ci_down = 18
+down_kbps = 10000
+up_kbps = 0
+max_leech = 50
+max_seed = 5
+max_dl_size = 10000000
+
+[post]
+protocol = cp
+base_url = /home/jdoe/tmp
+
+
+[upload]
+prepare = /home/jdoe/dev/bokor/src/bokor/executor/slavemktorrent_plugin/prepare.py
+mktorrent = /usr/bin/mktorrent
+notify_url = https://bot:bots@cinego-cgp2p.bearstech.com/notify_upload
+server = 42.42.42.42 
+user = login
+password = pass
+
+[memory]
+sqlitedir = /home/jdoe/tmp/slave/session
+

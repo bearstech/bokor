@@ -1,0 +1,3 @@
+#!/bin/sh
+
+./bocli -c config_bokor_test.py $*

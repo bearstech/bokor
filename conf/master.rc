@@ -1,0 +1,27 @@
+[logging]
+level = DEBUG
+path = /tmp/master.log
+[wsgi]
+ip = 0.0.0.0
+port = 4444
+
+[bokor]
+token=MASTERTOR
+category=master
+
+[master]
+socket_idle = 1
+socket_keep_alive = 1
+socket_max_fail = 1
+ip = 127.0.0.1
+port = 4280
+socket_timeout = 10
+
+[upload]
+path_ftp = /opt/data/backup
+path_repo = /opt/data/backup/cinego
+url_repo = https://cinemaster.exemple.net/torrents/
+
+[memory]
+sqlitedir = /tmp/master.db
+ 
