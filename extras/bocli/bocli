@@ -151,5 +151,5 @@ if __name__ == '__main__':
     else:
         args = "&".join(command[1:])
         command = command[0]
-        if args != "": command += "?%s" % args
-        print curl_json("%s/%s?%s" % (base_url, command, args))
+        print json.dumps(curl_json("%s/%s?%s" % (base_url, command, args)),
+                         indent=4)
