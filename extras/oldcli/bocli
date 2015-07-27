@@ -1,0 +1,109 @@
+#! /usr/bin/env python
+
+import json
+import os
+import pycurl
+import sys
+import urllib
+
+
+if len(sys.argv) < 2:
+    print "usage: ./cinego-cli [-s] [-c config] COMMAND [arguments]"
+    sys.exit(1)
+
+
+server = "BOKOR_SERVER_URL"
+user = "USER"
+password = "PASSWORD"
+base_url = 'https://' + user + ':' + password + '@' + server + '/'
+# while using 'commandX', use 'valueX' as default value for '--keyX'
+# DEFAULTS = {'command1': {'key1': 'value1', 'key2': 'value2'},
+#             'command2': {'key3': 'value3', 'key4': 'value4'}}
+DEFAULTS = {}
+# while using 'commandX', use the value of --key5 for --key6
+# DUPLICATE = {'command4': {'key6': 'key5'}}
+DUPLICATE = {}
+
+
+simple = 0
+if sys.argv[1] == "-s":
+    simple = 1
+    sys.argv = sys.argv[1:]
+
+if sys.argv[1] == "-c":
+    dirname = os.path.dirname(sys.argv[2])
+    filename = os.path.basename(sys.argv[2])
+
+    if dirname != '':
+        sys.path.append(dirname)
+    config = __import__(filename[:-3])
+    server, user, password, base_url, DEFAULTS, DUPLICATE = config.server, \
+                                                            config.user, \
+                                                            config.password, \
+                                                            config.base_url, \
+                                                            config.DEFAULTS, \
+                                                            config.DUPLICATE
+    sys.argv = sys.argv[2:]
+
+command = sys.argv[1]
+arguments = {}
+hash_file = None
+if not len(sys.argv) == 2:
+    i = 2
+    while i < len(sys.argv):
+        if i == len(sys.argv) - 1:
+            print "Error parsing argument: " + sys.argv[i]
+            sys.exit(1)
+        if not arguments.has_key(sys.argv[i][2:]):
+            arguments[sys.argv[i][2:]] = [sys.argv[i + 1]]
+        else:
+            arguments[sys.argv[i][2:]].append(sys.argv[i + 1])
+        # save DUPLICATE
+        if DUPLICATE.has_key(command) and \
+           sys.argv[i][2:] in DUPLICATE[command].keys():
+            if not arguments.has_key(DUPLICATE[command][sys.argv[i][2:]]):
+                arguments[DUPLICATE[command][sys.argv[i][2:]]] = [sys.argv[i + 1]]
+        i += 2
+
+tmp_arguments = arguments.copy()
+tmp_arguments.update({'config': config})
+# default values
+if DEFAULTS.has_key(command):
+    for k in DEFAULTS[command].keys():
+        if not arguments.has_key(k):
+            arguments[k] = [eval(DEFAULTS[command][k], tmp_arguments)]
+
+def curl(url) :
+    with open('/tmp/cinego-cli.tmp', 'w') as fd:
+        url = urllib.unquote(url)
+        url = url.encode('utf-8')
+        if not simple:
+            print url
+        curl = pycurl.Curl()
+        curl.setopt(pycurl.URL, url)
+        curl.setopt(pycurl.WRITEDATA, fd)
+        curl.setopt(curl.SSL_VERIFYPEER, 0)
+        curl.perform()
+        curl.close()
+        fd.seek(0)
+    return open('/tmp/cinego-cli.tmp')
+
+base_url = base_url.rstrip("/")
+
+if arguments :
+    fd = curl(base_url + '/' + command + '?' +
+              "&".join(["&".join([arg + "=" + val for val in arguments[arg]])
+                        for arg in arguments.keys()]))
+else :
+    if command == "/" : command = ''
+    fd = curl(base_url + '/' + command)
+
+if not simple:
+    print json.dumps(json.load(fd), indent = 4)
+else:
+    j = json.load(fd)
+    if type(j[0]["answer"]) == str or type(j[0]["answer"]) == unicode:
+        print j[0]["answer"]
+    else:
+        print json.dumps(j[0]["answer"], indent = 4)
+    exit(j[0]["code"])

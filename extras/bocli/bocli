@@ -1,84 +1,59 @@
 #! /usr/bin/env python
+# -*- encoding: utf-8 -*-
 
+"""\
+BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+B                                                                     B
+B          BBBBBB     BBBBBBBB  BBk BBB  BBBBBBBB    BBBBBK           B
+B          kBBBBBB  OKBBBBBBBB  BB  BBB  BBBBBBBBKO  BBRBBB           B
+B          kBB  BB  BBB.  .BBB  BB BBO   BBB.  .BBB  BB  BBB          B
+B          BBB BBB  BBk    .BB  BB BB    BB.    kBB  BB  .B           B
+B          BBBBB    BB   O  BB  BBBB     BB  O   BB  BBOBBB           B
+B           BBBBB   BBB. _ .BB  BBBB     BB. _ .BBB  BBBBK            B
+B          BBB BBB  BBB,  ,BB   BB BB     BB.  ,BBB  BBBBBB           B
+B          BBB  BB  BBBBBBBBB   BB kBB    BBBBBBBBB  RB  BB           B
+B          BBBBBBB  BBBBBBBB    BB  BB     BBBBBBBB  BB  BB           B
+B          BBBBBBB    BBBB      BBB BBB      BBBB    BB  BB           B
+B                                                                     B
+BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 3
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software Foundation,
+Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+
+@file bocli
+@author Maurice AUDIN <maudin@bearstech.com>
+@date 2015
+@brief bokor client
+"""
+
+
+import cmd
+import ConfigParser
 import json
 import os
 import pycurl
 import sys
 import urllib
 
+# Connection informations
+server, user, password, base_url = None, None, None, None
 
-if len(sys.argv) < 2:
-    print "usage: ./cinego-cli [-s] [-c config] COMMAND [arguments]"
-    sys.exit(1)
-
-
-server = "BOKOR_SERVER_URL"
-user = "USER"
-password = "PASSWORD"
-base_url = 'https://' + user + ':' + password + '@' + server + '/'
-# while using 'commandX', use 'valueX' as default value for '--keyX'
-# DEFAULTS = {'command1': {'key1': 'value1', 'key2': 'value2'},
-#             'command2': {'key3': 'value3', 'key4': 'value4'}}
-DEFAULTS = {}
-# while using 'commandX', use the value of --key5 for --key6
-# DUPLICATE = {'command4': {'key6': 'key5'}}
-DUPLICATE = {}
-
-
-simple = 0
-if sys.argv[1] == "-s":
-    simple = 1
-    sys.argv = sys.argv[1:]
-
-if sys.argv[1] == "-c":
-    dirname = os.path.dirname(sys.argv[2])
-    filename = os.path.basename(sys.argv[2])
-
-    if dirname != '':
-        sys.path.append(dirname)
-    config = __import__(filename[:-3])
-    server, user, password, base_url, DEFAULTS, DUPLICATE = config.server, \
-                                                            config.user, \
-                                                            config.password, \
-                                                            config.base_url, \
-                                                            config.DEFAULTS, \
-                                                            config.DUPLICATE
-    sys.argv = sys.argv[2:]
-
-command = sys.argv[1]
-arguments = {}
-hash_file = None
-if not len(sys.argv) == 2:
-    i = 2
-    while i < len(sys.argv):
-        if i == len(sys.argv) - 1:
-            print "Error parsing argument: " + sys.argv[i]
-            sys.exit(1)
-        if not arguments.has_key(sys.argv[i][2:]):
-            arguments[sys.argv[i][2:]] = [sys.argv[i + 1]]
-        else:
-            arguments[sys.argv[i][2:]].append(sys.argv[i + 1])
-        # save DUPLICATE
-        if DUPLICATE.has_key(command) and \
-           sys.argv[i][2:] in DUPLICATE[command].keys():
-            if not arguments.has_key(DUPLICATE[command][sys.argv[i][2:]]):
-                arguments[DUPLICATE[command][sys.argv[i][2:]]] = [sys.argv[i + 1]]
-        i += 2
-
-tmp_arguments = arguments.copy()
-tmp_arguments.update({'config': config})
-# default values
-if DEFAULTS.has_key(command):
-    for k in DEFAULTS[command].keys():
-        if not arguments.has_key(k):
-            arguments[k] = [eval(DEFAULTS[command][k], tmp_arguments)]
-
-def curl(url) :
+# Get url and translate to json
+def curl_json(url):
     with open('/tmp/cinego-cli.tmp', 'w') as fd:
         url = urllib.unquote(url)
         url = url.encode('utf-8')
-        if not simple:
-            print url
         curl = pycurl.Curl()
         curl.setopt(pycurl.URL, url)
         curl.setopt(pycurl.WRITEDATA, fd)
@@ -86,24 +61,95 @@ def curl(url) :
         curl.perform()
         curl.close()
         fd.seek(0)
-    return open('/tmp/cinego-cli.tmp')
+    return json.load(open('/tmp/cinego-cli.tmp'))
 
-base_url = base_url.rstrip("/")
+# Bokor command line class
+class BkrCmd(cmd.Cmd):
+    token = None
+    prompt = "(bkr) "
+    functions = []
 
-if arguments :
-    fd = curl(base_url + '/' + command + '?' +
-              "&".join(["&".join([arg + "=" + val for val in arguments[arg]])
-                        for arg in arguments.keys()]))
-else :
-    if command == "/" : command = ''
-    fd = curl(base_url + '/' + command)
+    # Choose token_site
+    def complete_token(self, text, line, start_index, end_index):
+        js = curl_json(base_url)
+        tokens = [str(x['token_site']) for x in js['answer']]
+        if text:
+            return [token for token in tokens if token.startswith(text)]
+        else:
+            return tokens
+    def do_token(self, line):
+        """Choose token_site [(bkr) token TOKEN]"""
+        self.token = line
+        for f in self.functions:
+            delattr(self.__class__, "do_%s" % f)
+        self.prompt = "(bkr [" + line + "]) "
+        self.functions = []
 
-if not simple:
-    print json.dumps(json.load(fd), indent = 4)
-else:
-    j = json.load(fd)
-    if type(j[0]["answer"]) == str or type(j[0]["answer"]) == unicode:
-        print j[0]["answer"]
+        js = curl_json("%s/help?token_site=%s" % (base_url, self.token))
+        modules = js['answer']
+
+        def make_method(module, function):
+            m = modules[module][function]
+            def _method(self, line):
+                cu = curl_json("%s/%s?token_site=%s&%s"
+                               % (base_url, function, self.token,
+                                  "&".join(line.split())))["answer"]
+                print json.dumps(cu, indent=4)
+            _method.__doc__ = m["doc"]
+            return _method
+
+        for m in modules.keys():
+            for f in modules[m].keys():
+                if f != "help":
+                    setattr(self.__class__, "do_%s" % f, make_method(m, f))
+                    self.functions.append(f)
+
+
+    def do_exit(self, line):
+        """Exit prompt [(bkr) exit]"""
+        return True
+
+
+if __name__ == '__main__':
+    config_file = os.path.expanduser("~/.config/bocli.rc")
+    args = sys.argv[1:]
+    command = []
+    while len(args) != 0:
+        if len(command) == 0 and args[0] == "-c":
+            if len(args) == 1:
+                print "usage: bocli [-c config] [command]"
+                exit(1)
+            config_file = args[1]
+            args = args[2:]
+            continue
+        command.append(args[0])
+        args = args[1:]
+
+    # Get config if file exists, print error and continue if invalid
+    if os.path.exists(config_file):
+        try:
+            config = ConfigParser.ConfigParser()
+            config.readfp(open(config_file))
+            server, user, password = config.get("bocli", "server"), \
+                                     config.get("bocli", "user"), \
+                                     config.get("bocli", "password")
+            base_url = "https://%s:%s@%s/" % (user, password, server)
+        except Exception as e:
+            print("Error in configuration file: %s" % e)
+            server, user, password, base_url = None, None, None, None
+
+    # Get configuration from command line if no configuration or invalid file
+    if not server or not user or not password or not base_url:
+        server          = raw_input("server: ")
+        user            = raw_input("user: ")
+        password        = raw_input("password: ")
+        base_url        = "https://%s:%s@%s" % (user, password, server)
+
+    if len(command) == 0:
+        bkrcmd = BkrCmd()
+        bkrcmd.cmdloop()
     else:
-        print json.dumps(j[0]["answer"], indent = 4)
-    exit(j[0]["code"])
+        args = "&".join(command[1:])
+        command = command[0]
+        if args != "": command += "?%s" % args
+        print curl_json("%s/%s?%s" % (base_url, command, args))
